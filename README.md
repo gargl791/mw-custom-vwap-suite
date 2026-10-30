@@ -6,7 +6,7 @@ A MotiveWave study that plots Daily, Weekly and Monthly VWAP with ±1 and ±2 st
 
 - **Daily, Weekly, Monthly VWAP** in one study. Each period has its own tab and can be turned off.
 - **±1σ and ±2σ bands** per period. Std multipliers, lines, axis indicators and fills are all editable.
-- **Floating labels** (`dVWAP`, `d+1`, `w-2`, `mVWAP`, ...) coloured to match their lines. Overlapping tags are pushed apart with a short leader line, so many levels do not cover the chart.
+- **Floating labels** with price (`dVWAP 28965.25`, `d+1 29040.50`, ...) coloured to match their lines. Overlapping tags are pushed apart with a short leader line, so many levels do not cover the chart.
 - **Session option**: Extended (18:00 ET, default), RTH (9:30 ET), or follow the chart setting.
 - **Resets each period**: lines break at the start of every day, week and month.
 
@@ -22,8 +22,8 @@ Follows MotiveWave's built-in `VWAP.java`:
 
 | Tab | Options |
 |---|---|
-| General | Session, Use Historical Bars, History Lookback (days, default 90, min 35) |
-| Labels | Show Labels, Label Std Dev Bands, Label Font, Label Offset From Right Edge (px) |
+| General | Session, Use Historical Bars, Match MotiveWave Bands, History Lookback (days, default 90, min 35) |
+| Labels | Show Labels, Label Std Dev Bands, Show Price In Label (all levels, VWAP only, none), Label Font, Label Offset From Right Edge (px) |
 | Daily / Weekly / Monthly | VWAP line and axis indicator; Band 1 and Band 2: line, std multiplier, top/bottom indicators, fill |
 
 Defaults: bands on at 1σ and 2σ, fills off. Colours: Daily blue, Weekly red, Monthly orange.

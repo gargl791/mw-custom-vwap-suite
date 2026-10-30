@@ -66,8 +66,8 @@ public class CustomVWAPSuite extends Study
   static final String[] NAME = { "Daily", "Weekly", "Monthly" };
   static final String[] PFX = { "d", "w", "m" };
 
-  static final String RTH="rth", USE_HISTORICAL_BARS="useBars", LOOKBACK="lookback";
-  static final String SHOW_LABELS="showLabels", SHOW_BAND_LABELS="showBandLabels", LABEL_FONT="labelFont", LABEL_OFFSET="labelOffset";
+  static final String RTH="rth", USE_HISTORICAL_BARS="useBars", LOOKBACK="lookback", MATCH_ORIGINAL="matchOriginal";
+  static final String SHOW_LABELS="showLabels", SHOW_BAND_LABELS="showBandLabels", SHOW_PRICE="showPrice", LABEL_FONT="labelFont", LABEL_OFFSET="labelOffset";
   static final String VAL_RTH="R", VAL_EXT="E", VAL_CHART="C";
 
   // Setting keys, per period p: k(p,"PATH") main line, "IND" axis tag, "PATH1"/"PATH2" bands, "STD1"/"STD2", etc.
@@ -86,12 +86,18 @@ public class CustomVWAPSuite extends Study
     var grp = tab.addGroup("", false);
     grp.addRow(new DiscreteDescriptor(RTH, "Session", VAL_EXT, rthOptions));
     grp.addRow(new BooleanDescriptor(USE_HISTORICAL_BARS, "Use Historical Bars", true, false));
+    grp.addRow(new BooleanDescriptor(MATCH_ORIGINAL, "Match MotiveWave VWAP Bands (skip 1st bar of period)", true, false));
     grp.addRow(new IntegerDescriptor(LOOKBACK, "History Lookback (days)", 90, 35, 3650, 1));
 
     tab = sd.addTab("Labels");
     grp = tab.addGroup("", false);
     grp.addRow(new BooleanDescriptor(SHOW_LABELS, "Show Labels", true, false));
     grp.addRow(new BooleanDescriptor(SHOW_BAND_LABELS, "Label Std Dev Bands", true, false));
+    List<NVP> priceOptions = new ArrayList<>();
+    priceOptions.add(new NVP("All Levels", "A"));
+    priceOptions.add(new NVP("VWAP Lines Only", "V"));
+    priceOptions.add(new NVP("None", "N"));
+    grp.addRow(new DiscreteDescriptor(SHOW_PRICE, "Show Price In Label", "A", priceOptions));
     grp.addRow(new FontDescriptor(LABEL_FONT, "Label Font", defaults.getFont().deriveFont(Font.BOLD, 11f)));
     grp.addRow(new IntegerDescriptor(LABEL_OFFSET, "Label Offset From Right Edge (px)", 8, 0, 500, 1));
 
@@ -199,6 +205,7 @@ public class CustomVWAPSuite extends Study
       else if (Util.compare(rthData, VAL_EXT)) rth = false;
 
       var eng = new Engine(series, instr, rth);
+      eng.skipFirst = settings.getBoolean(MATCH_ORIGINAL, true);
       for(int p = 0; p < 3; p++) {
         var path = settings.getPath(k(p,"PATH"));
         eng.on[p] = path != null && path.isEnabled();
@@ -243,6 +250,8 @@ public class CustomVWAPSuite extends Study
     final double[] totalPrice = new double[3], totalVol = new double[3];  // tick based VWAP sums
     final double[] bv = new double[3], bvp = new double[3], bvp2 = new double[3]; // completed bar sums for bands
     final double[] curBarVol = new double[3];               // tick volume seen in the current bar (per period)
+    final int[] firstBar = new int[3];                      // index of the first bar of the current period
+    boolean skipFirst;
     int ind;
 
     Engine(DataSeries series, Instrument instr, boolean rth)
@@ -285,6 +294,7 @@ public class CustomVWAPSuite extends Study
       totalPrice[p] = totalVol[p] = 0;
       bv[p] = bvp[p] = bvp2[p] = 0;
       curBarVol[p] = 0;
+      firstBar[p] = ind;
       for(int k = 0; k < 5; k++) series.setPathBreak(ind, VAL[p][k], true);
     }
 
@@ -293,7 +303,7 @@ public class CustomVWAPSuite extends Study
     void finishBar(int i)
     {
       for(int p = 0; p < 3; p++) {
-        if (on[p] && curBarVol[p] > 0) {
+        if (on[p] && curBarVol[p] > 0 && !(skipFirst && i == firstBar[p])) {
           double vol = series.getVolumeAsFloat(i), pr = hlc3(i);
           bv[p] += vol;
           bvp[p] += vol*pr;
@@ -313,7 +323,7 @@ public class CustomVWAPSuite extends Study
 
         // Sierra Chart style: sum(vol*(hlc3 - vwap)^2)/sum(vol) over the bars of the period, expanded into running sums
         double sv = bv[p], svp = bvp[p], svp2 = bvp2[p];
-        if (curBarVol[p] > 0) {
+        if (curBarVol[p] > 0 && !(skipFirst && i == firstBar[p])) {
           double vol = series.getVolumeAsFloat(i), pr = hlc3(i);
           sv += vol; svp += vol*pr; svp2 += vol*pr*pr;
         }
@@ -347,6 +357,8 @@ public class CustomVWAPSuite extends Study
       int last = series.size() - 1;
       if (last < 0) return;
       boolean bands = s.getBoolean(SHOW_BAND_LABELS, true);
+      String priceMode = s.getString(SHOW_PRICE, "A");
+      var instr = series.getInstrument();
 
       FontInfo fi = s.getFont(LABEL_FONT);
       Font font = fi != null ? fi.getFont() : g.getFont();
@@ -374,6 +386,7 @@ public class CustomVWAPSuite extends Study
             double std = s.getDouble(kk <= 2 ? k(p,"STD1") : k(p,"STD2"));
             txt = PFX[p] + (kk % 2 == 1 ? "+" : "-") + fmt(std);
           }
+          if (Util.compare(priceMode, "A") || (kk == 0 && Util.compare(priceMode, "V"))) txt += " " + instr.format(instr.round(v));
           ys.add(new double[] { y, y, texts.size() });
           texts.add(txt);
           cols.add(path.getColor());
