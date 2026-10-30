@@ -1,0 +1,37 @@
+# Local root files & build outputs
+/commit-msg.txt
+
+
+# JDK / JRE directories
+jdk-*/
+jre-*/
+*.jdk/
+
+# Java compiled outputs & archives
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# Build tool directories
+bin/
+out/
+target/
+.gradle/
+
+# IDE files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+*.nbgraph
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Motivewave Gex Data folder
+data/
