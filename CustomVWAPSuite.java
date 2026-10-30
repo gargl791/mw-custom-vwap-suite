@@ -24,7 +24,6 @@ import com.motivewave.platform.sdk.common.X11Colors;
 import com.motivewave.platform.sdk.common.desc.BooleanDescriptor;
 import com.motivewave.platform.sdk.common.desc.DiscreteDescriptor;
 import com.motivewave.platform.sdk.common.desc.DoubleDescriptor;
-import com.motivewave.platform.sdk.common.desc.EnabledDependency;
 import com.motivewave.platform.sdk.common.desc.FontDescriptor;
 import com.motivewave.platform.sdk.common.desc.IndicatorDescriptor;
 import com.motivewave.platform.sdk.common.desc.IntegerDescriptor;
@@ -137,10 +136,6 @@ public class CustomVWAPSuite extends Study
       grp.addRow(new ShadeDescriptor(k(p,"FILL2"), "Fill Color",
           new String[][] { { VAL[p][1].name(), VAL[p][3].name() }, { VAL[p][2].name(), VAL[p][4].name() } }, Util.getAlphaFill(c), false, true));
 
-      sd.addDependency(new EnabledDependency(k(p,"PATH1"), k(p,"PATH2"), k(p,"TOP_IND1"), k(p,"BOT_IND1"), k(p,"FILL1")));
-      var dep = new EnabledDependency(k(p,"PATH2"), k(p,"TOP_IND2"), k(p,"BOT_IND2"), k(p,"FILL2"));
-      dep.setSource2(k(p,"PATH1"));
-      sd.addDependency(dep);
     }
 
     sd.addQuickSettings(RTH, k(0,"ENABLED"), k(1,"ENABLED"), k(2,"ENABLED"));
@@ -229,6 +224,7 @@ public class CustomVWAPSuite extends Study
 
       instr.forEachTick(start, ctx.getCurrentTime() + 5*Util.MILLIS_IN_MINUTE, rth, settings.getBoolean(USE_HISTORICAL_BARS, true), eng);
       eng.flush(eng.ind);
+      for(int p = 0; p < 3; p++) eng.partial[p] = eng.on[p] && series.getStartTime(0) > eng.curStart[p] + 5*Util.MILLIS_IN_MINUTE;
       engine = eng;
     }
     finally {
@@ -252,6 +248,8 @@ public class CustomVWAPSuite extends Study
     final double[] totalPrice = new double[3], totalVol = new double[3];  // tick based VWAP sums
     final double[] bv = new double[3], bvp = new double[3], bvp2 = new double[3]; // completed bar sums for bands
     final double[] curBarVol = new double[3];               // tick volume seen in the current bar (per period)
+    final long[] curStart = new long[3];                     // start of the current period
+    final boolean[] partial = new boolean[3];               // true if loaded bars do not cover the whole current period
     final int[] firstBar = new int[3];                      // index of the first bar of the current period
     boolean skipFirst;
     int ind;
@@ -293,6 +291,7 @@ public class CustomVWAPSuite extends Study
       else { s = instr.getStartOfMonth(t, rth); e = instr.getEndOfMonth(t, rth); }
       if (e <= t) e = t + Util.MILLIS_IN_MINUTE; // safety
       end[p] = e;
+      curStart[p] = s;
       totalPrice[p] = totalVol[p] = 0;
       bv[p] = bvp[p] = bvp2[p] = 0;
       curBarVol[p] = 0;
@@ -382,12 +381,15 @@ public class CustomVWAPSuite extends Study
           double y = ctx.translateValueD(v);
           if (y < b.getMinY() || y > b.getMaxY()) continue;
           String txt;
+          var eng = engine;
+          boolean part = eng != null && eng.partial[p];
           if (kk == 0) txt = PFX[p] + "VWAP";
           else {
             double std = s.getDouble(kk <= 2 ? k(p,"STD1") : k(p,"STD2"));
             txt = PFX[p] + (kk % 2 == 1 ? "+" : "-") + fmt(std);
           }
           if (Util.compare(priceMode, "A") || (kk == 0 && Util.compare(priceMode, "V"))) txt += " " + instr.format(instr.round(v));
+          if (part) txt += "*";
           ys.add(new double[] { y, y, texts.size() });
           texts.add(txt);
           cols.add(path.getColor());

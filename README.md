@@ -35,6 +35,8 @@ See [compile.md](compile.md).
 
 ## Scope and limitations
 
+- **Partial history**: a label ending in `*` means the chart's loaded bars start after the beginning of that period, so the VWAP only covers the loaded data. Load more history on the chart (for tick and 1-minute charts, many days of bars are needed for the monthly VWAP). **History Lookback** only limits how far back ticks are replayed; it cannot add data the chart has not loaded.
+
 - Quarterly, yearly and rolling (7/30/90/365 day) VWAPs are not included yet.
 - Prior-period levels are not projected. Older periods still draw as separate lines, as in MotiveWave's own VWAP; labels show the current period only.
 - Not yet tested against a live MotiveWave install: verify period boundaries and the ±2σ fill first.
