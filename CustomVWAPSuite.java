@@ -67,7 +67,7 @@ public class CustomVWAPSuite extends Study
   static final String[] PFX = { "d", "w", "m" };
 
   static final String RTH="rth", USE_HISTORICAL_BARS="useBars", LOOKBACK="lookback", MATCH_ORIGINAL="matchOriginal";
-  static final String SHOW_LABELS="showLabels", SHOW_BAND_LABELS="showBandLabels", SHOW_PRICE="showPrice", LABEL_FONT="labelFont", LABEL_OFFSET="labelOffset";
+  static final String SHOW_LABELS="showLabels", SHOW_PRICE="showPrice", LABEL_FONT="labelFont", LABEL_OFFSET="labelOffset";
   static final String VAL_RTH="R", VAL_EXT="E", VAL_CHART="C";
 
   // Setting keys, per period p: k(p,"PATH") main line, "IND" axis tag, "PATH1"/"PATH2" bands, "STD1"/"STD2", etc.
@@ -92,7 +92,6 @@ public class CustomVWAPSuite extends Study
     tab = sd.addTab("Labels");
     grp = tab.addGroup("", false);
     grp.addRow(new BooleanDescriptor(SHOW_LABELS, "Show Labels", true, false));
-    grp.addRow(new BooleanDescriptor(SHOW_BAND_LABELS, "Label Std Dev Bands", true, false));
     List<NVP> priceOptions = new ArrayList<>();
     priceOptions.add(new NVP("All Levels", "A"));
     priceOptions.add(new NVP("VWAP Lines Only", "V"));
@@ -106,6 +105,12 @@ public class CustomVWAPSuite extends Study
     for(int p = 0; p < 3; p++) {
       Color c = colors[p];
       tab = sd.addTab(NAME[p]);
+
+      grp = tab.addGroup("General", false);
+      grp.addRow(new BooleanDescriptor(k(p,"ENABLED"), "Enable " + NAME[p] + " VWAP (calculation and labels)", true, false));
+      grp.addRow(new BooleanDescriptor(k(p,"LBL0"), "Label VWAP", true, false));
+      grp.addRow(new BooleanDescriptor(k(p,"LBL1"), "Label Band 1", true, false));
+      grp.addRow(new BooleanDescriptor(k(p,"LBL2"), "Label Band 2", true, false));
 
       grp = tab.addGroup("VWAP", false);
       var pdesc = new PathDescriptor(k(p,"PATH"), "Line", c, 1.0f, null, true, true, true);
@@ -132,13 +137,13 @@ public class CustomVWAPSuite extends Study
       grp.addRow(new ShadeDescriptor(k(p,"FILL2"), "Fill Color",
           new String[][] { { VAL[p][1].name(), VAL[p][3].name() }, { VAL[p][2].name(), VAL[p][4].name() } }, Util.getAlphaFill(c), false, true));
 
-      sd.addDependency(new EnabledDependency(k(p,"PATH1"), k(p,"PATH2"), k(p,"STD1"), k(p,"TOP_IND1"), k(p,"BOT_IND1"), k(p,"FILL1")));
-      var dep = new EnabledDependency(k(p,"PATH2"), k(p,"STD2"), k(p,"TOP_IND2"), k(p,"BOT_IND2"), k(p,"FILL2"));
+      sd.addDependency(new EnabledDependency(k(p,"PATH1"), k(p,"PATH2"), k(p,"TOP_IND1"), k(p,"BOT_IND1"), k(p,"FILL1")));
+      var dep = new EnabledDependency(k(p,"PATH2"), k(p,"TOP_IND2"), k(p,"BOT_IND2"), k(p,"FILL2"));
       dep.setSource2(k(p,"PATH1"));
       sd.addDependency(dep);
     }
 
-    sd.addQuickSettings(RTH, k(0,"PATH"), k(1,"PATH"), k(2,"PATH"));
+    sd.addQuickSettings(RTH, k(0,"ENABLED"), k(1,"ENABLED"), k(2,"ENABLED"));
 
     var desc = createRD();
     desc.setLabelSettings(RTH);
@@ -207,12 +212,9 @@ public class CustomVWAPSuite extends Study
       var eng = new Engine(series, instr, rth);
       eng.skipFirst = settings.getBoolean(MATCH_ORIGINAL, true);
       for(int p = 0; p < 3; p++) {
-        var path = settings.getPath(k(p,"PATH"));
-        eng.on[p] = path != null && path.isEnabled();
-        var p1 = settings.getPath(k(p,"PATH1"));
-        eng.band1[p] = eng.on[p] && p1 != null && p1.isEnabled();
-        var p2 = settings.getPath(k(p,"PATH2"));
-        eng.band2[p] = eng.band1[p] && p2 != null && p2.isEnabled();
+        eng.on[p] = settings.getBoolean(k(p,"ENABLED"), true);
+        eng.band1[p] = eng.on[p];
+        eng.band2[p] = eng.on[p];
         eng.std1[p] = settings.getDouble(k(p,"STD1"));
         eng.std2[p] = settings.getDouble(k(p,"STD2"));
       }
@@ -356,7 +358,6 @@ public class CustomVWAPSuite extends Study
       var series = ctx.getDataContext().getDataSeries();
       int last = series.size() - 1;
       if (last < 0) return;
-      boolean bands = s.getBoolean(SHOW_BAND_LABELS, true);
       String priceMode = s.getString(SHOW_PRICE, "A");
       var instr = series.getInstrument();
 
@@ -372,10 +373,10 @@ public class CustomVWAPSuite extends Study
       List<Color> cols = new ArrayList<>();
       for(int p = 0; p < 3; p++) {
         for(int kk = 0; kk < 5; kk++) {
-          if (kk > 0 && !bands) continue;
+          if (!s.getBoolean(k(p,"ENABLED"), true) || !s.getBoolean(k(p,"LBL" + (kk == 0 ? 0 : kk <= 2 ? 1 : 2)), true)) continue;
           String pk = kk == 0 ? k(p,"PATH") : kk <= 2 ? k(p,"PATH1") : k(p,"PATH2");
           var path = s.getPath(pk);
-          if (path == null || !path.isEnabled()) continue;
+          if (path == null) continue;
           Double v = series.getDouble(last, VAL[p][kk]);
           if (v == null) continue;
           double y = ctx.translateValueD(v);
