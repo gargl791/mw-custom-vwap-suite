@@ -9,6 +9,7 @@ A MotiveWave study that plots Daily, Weekly and Monthly VWAP with ±1 and ±2 st
 - **±1σ and ±2σ bands** per period. Std multipliers, lines, axis indicators and fills are all editable.
 - **Floating labels** with price (`dVWAP 28965.25`, `d+1 29040.50`, ...) coloured to match their lines. Overlapping tags are pushed apart with a short leader line, so many levels do not cover the chart.
 - **Session option**: Extended (18:00 ET, default), RTH (9:30 ET), or follow the chart setting.
+- **Prior weekly and monthly levels**: the final VWAP and bands of the last closed week and month appear as dimmed labels (`pwVWAP`, `pw+1`, `pmVWAP`, ...). They are captured at rollover from the same tick pass, so there is no extra calculation. Labels only, no lines.
 - **Resets each period**: lines break at the start of every day, week and month.
 
 ## Calculation
@@ -23,8 +24,9 @@ Follows MotiveWave's built-in `VWAP.java`:
 
 | Tab | Options |
 |---|---|
-| General | Session, Use Historical Bars, Match MotiveWave Bands, History Lookback (days, default 90, min 35) |
+| General | Session, Use Historical Bars, Match MotiveWave Bands, History Lookback (days, default 45, min 35) |
 | Labels | Show Labels, Show Price In Label (all levels, VWAP only, none), Label Font, Label Offset From Right Edge (px) |
+| Weekly / Monthly | Prior Levels: Show Prior Levels, Label Prior VWAP / Band 1 / Band 2 |
 | Daily / Weekly / Monthly | Enable period; Label VWAP / Band 1 / Band 2; VWAP line and axis indicator; Band 1 and Band 2: line, std multiplier, top/bottom indicators, fill |
 
 Defaults: bands on at 1σ and 2σ, fills off. Colours: Daily blue, Weekly red, Monthly orange.
@@ -38,7 +40,7 @@ See [compile.md](compile.md).
 - **Partial history**: a label ending in `*` means the chart's loaded bars start after the beginning of that period, so the VWAP only covers the loaded data. Load more history on the chart (for tick and 1-minute charts, many days of bars are needed for the monthly VWAP). **History Lookback** only limits how far back ticks are replayed; it cannot add data the chart has not loaded.
 
 - Quarterly, yearly and rolling (7/30/90/365 day) VWAPs are not included yet.
-- Prior-period levels are not projected. Older periods still draw as separate lines, as in MotiveWave's own VWAP; labels show the current period only.
+- Prior levels are shown for the last closed week and month only, as labels (no daily, no lines). Older periods still draw as separate lines, as in MotiveWave's own VWAP.
 - Not yet tested against a live MotiveWave install: verify period boundaries and the ±2σ fill first.
 
 ## Files

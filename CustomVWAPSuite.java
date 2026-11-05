@@ -86,7 +86,7 @@ public class CustomVWAPSuite extends Study
     grp.addRow(new DiscreteDescriptor(RTH, "Session", VAL_EXT, rthOptions));
     grp.addRow(new BooleanDescriptor(USE_HISTORICAL_BARS, "Use Historical Bars", true, false));
     grp.addRow(new BooleanDescriptor(MATCH_ORIGINAL, "Match MotiveWave VWAP Bands (skip 1st bar of period)", true, false));
-    grp.addRow(new IntegerDescriptor(LOOKBACK, "History Lookback (days)", 90, 35, 3650, 1));
+    grp.addRow(new IntegerDescriptor(LOOKBACK, "History Lookback (days)", 45, 35, 3650, 1));
 
     tab = sd.addTab("Labels");
     grp = tab.addGroup("", false);
@@ -110,6 +110,13 @@ public class CustomVWAPSuite extends Study
       grp.addRow(new BooleanDescriptor(k(p,"LBL0"), "Label VWAP", true, false));
       grp.addRow(new BooleanDescriptor(k(p,"LBL1"), "Label Band 1", true, false));
       grp.addRow(new BooleanDescriptor(k(p,"LBL2"), "Label Band 2", true, false));
+      if (p >= 1) {
+        grp = tab.addGroup("Prior Levels (labels)", false);
+        grp.addRow(new BooleanDescriptor(k(p,"PRIOR"), "Show Prior " + NAME[p].replace("ly", "") + " Levels", true, false));
+        grp.addRow(new BooleanDescriptor(k(p,"PLBL0"), "Label Prior VWAP", true, false));
+        grp.addRow(new BooleanDescriptor(k(p,"PLBL1"), "Label Prior Band 1", true, false));
+        grp.addRow(new BooleanDescriptor(k(p,"PLBL2"), "Label Prior Band 2", true, false));
+      }
 
       grp = tab.addGroup("VWAP", false);
       var pdesc = new PathDescriptor(k(p,"PATH"), "Line", c, 1.0f, null, true, true, true);
@@ -215,7 +222,7 @@ public class CustomVWAPSuite extends Study
       }
 
       // Replay ticks from the start of the month that contains (now - lookback). Monthly VWAP needs the full month.
-      int lookback = settings.getInteger(LOOKBACK, 90);
+      int lookback = settings.getInteger(LOOKBACK, 45);
       long from = instr.getStartOfMonth(ctx.getCurrentTime() - lookback * Util.MILLIS_IN_DAY, rth);
       long first = series.getStartTime(0);
       long start = Math.max(from, first);
@@ -252,6 +259,9 @@ public class CustomVWAPSuite extends Study
     final boolean[] partial = new boolean[3];               // true if loaded bars do not cover the whole current period
     final int[] firstBar = new int[3];                      // index of the first bar of the current period
     boolean skipFirst;
+    final double[][] prev = new double[3][];                // final levels of the prior (closed) period
+    final boolean[] prevPartial = new boolean[3];
+    long firstTick;
     int ind;
 
     Engine(DataSeries series, Instrument instr, boolean rth)
@@ -265,6 +275,7 @@ public class CustomVWAPSuite extends Study
     public void onTick(Tick tick)
     {
       long t = tick.getTime();
+      if (firstTick == 0) firstTick = t;
       // Advance the bar index (filling any bars that had no ticks)
       while (ind < series.size()-1 && t >= series.getEndTime(ind)) {
         flush(ind);
@@ -290,6 +301,13 @@ public class CustomVWAPSuite extends Study
       else if (p == 1) { s = instr.getStartOfWeek(t, rth); e = instr.getEndOfWeek(t, rth); }
       else { s = instr.getStartOfMonth(t, rth); e = instr.getEndOfMonth(t, rth); }
       if (e <= t) e = t + Util.MILLIS_IN_MINUTE; // safety
+      if (p >= 1 && totalVol[p] > 0) { // the period that just closed becomes the "prior" levels
+        double[] r = levels(p, ind);
+        if (r != null) {
+          prev[p] = r;
+          prevPartial[p] = firstTick > curStart[p] + 5*Util.MILLIS_IN_MINUTE;
+        }
+      }
       end[p] = e;
       curStart[p] = s;
       totalPrice[p] = totalVol[p] = 0;
@@ -314,28 +332,29 @@ public class CustomVWAPSuite extends Study
       }
     }
 
+    /** Final VWAP and band levels {vwap, +1, -1, +2, -2} of period p as of bar i, or null if no data yet. */
+    double[] levels(int p, int i)
+    {
+      if (totalVol[p] == 0) return null;
+      double vwap = totalPrice[p] / totalVol[p];
+      // Sierra Chart style: sum(vol*(hlc3 - vwap)^2)/sum(vol) over the bars of the period, expanded into running sums
+      double sv = bv[p], svp = bvp[p], svp2 = bvp2[p];
+      if (curBarVol[p] > 0 && !(skipFirst && i == firstBar[p])) {
+        double vol = series.getVolumeAsFloat(i), pr = hlc3(i);
+        sv += vol; svp += vol*pr; svp2 += vol*pr*pr;
+      }
+      double dev = 0;
+      if (sv > 0) dev = Math.sqrt(Math.max(0, (svp2 - 2*vwap*svp + vwap*vwap*sv) / sv));
+      return new double[] { vwap, vwap + dev*std1[p], vwap - dev*std1[p], vwap + dev*std2[p], vwap - dev*std2[p] };
+    }
+
     void flush(int i)
     {
       for(int p = 0; p < 3; p++) {
-        if (!on[p] || totalVol[p] == 0) continue;
-        double vwap = totalPrice[p] / totalVol[p];
-        series.setDouble(i, VAL[p][0], vwap);
-        if (!band1[p]) continue;
-
-        // Sierra Chart style: sum(vol*(hlc3 - vwap)^2)/sum(vol) over the bars of the period, expanded into running sums
-        double sv = bv[p], svp = bvp[p], svp2 = bvp2[p];
-        if (curBarVol[p] > 0 && !(skipFirst && i == firstBar[p])) {
-          double vol = series.getVolumeAsFloat(i), pr = hlc3(i);
-          sv += vol; svp += vol*pr; svp2 += vol*pr*pr;
-        }
-        double dev = 0;
-        if (sv > 0) dev = Math.sqrt(Math.max(0, (svp2 - 2*vwap*svp + vwap*vwap*sv) / sv));
-        series.setDouble(i, VAL[p][1], vwap + dev*std1[p]);
-        series.setDouble(i, VAL[p][2], vwap - dev*std1[p]);
-        if (band2[p]) {
-          series.setDouble(i, VAL[p][3], vwap + dev*std2[p]);
-          series.setDouble(i, VAL[p][4], vwap - dev*std2[p]);
-        }
+        if (!on[p]) continue;
+        double[] r = levels(p, i);
+        if (r == null) continue;
+        for(int k = 0; k < 5; k++) series.setDouble(i, VAL[p][k], r[k]);
       }
     }
   }
@@ -370,29 +389,38 @@ public class CustomVWAPSuite extends Study
       List<double[]> ys = new ArrayList<>(); // {trueY, labelY, idx}
       List<String> texts = new ArrayList<>();
       List<Color> cols = new ArrayList<>();
-      for(int p = 0; p < 3; p++) {
+      for(int pass = 0; pass < 2; pass++) for(int p = (pass == 0 ? 0 : 1); p < 3; p++) {
         for(int kk = 0; kk < 5; kk++) {
-          if (!s.getBoolean(k(p,"ENABLED"), true) || !s.getBoolean(k(p,"LBL" + (kk == 0 ? 0 : kk <= 2 ? 1 : 2)), true)) continue;
+          int g = kk == 0 ? 0 : kk <= 2 ? 1 : 2;
+          if (!s.getBoolean(k(p,"ENABLED"), true) || !s.getBoolean(k(p, (pass == 1 ? "PLBL" : "LBL") + g), true)) continue;
+          if (pass == 1 && !s.getBoolean(k(p,"PRIOR"), true)) continue;
           String pk = kk == 0 ? k(p,"PATH") : kk <= 2 ? k(p,"PATH1") : k(p,"PATH2");
           var path = s.getPath(pk);
           if (path == null) continue;
-          Double v = series.getDouble(last, VAL[p][kk]);
+          var eng = engine;
+          Double v;
+          if (pass == 0) v = series.getDouble(last, VAL[p][kk]);
+          else {
+            double[] pr = eng != null ? eng.prev[p] : null;
+            v = (pr == null || Double.isNaN(pr[kk])) ? null : Double.valueOf(pr[kk]);
+          }
           if (v == null) continue;
           double y = ctx.translateValueD(v);
           if (y < b.getMinY() || y > b.getMaxY()) continue;
           String txt;
-          var eng = engine;
-          boolean part = eng != null && eng.partial[p];
-          if (kk == 0) txt = PFX[p] + "VWAP";
+          String pf = (pass == 1 ? "p" : "") + PFX[p];
+          boolean part = eng != null && (pass == 1 ? eng.prevPartial[p] : eng.partial[p]);
+          if (kk == 0) txt = pf + "VWAP";
           else {
             double std = s.getDouble(kk <= 2 ? k(p,"STD1") : k(p,"STD2"));
-            txt = PFX[p] + (kk % 2 == 1 ? "+" : "-") + fmt(std);
+            txt = pf + (kk % 2 == 1 ? "+" : "-") + fmt(std);
           }
           if (Util.compare(priceMode, "A") || (kk == 0 && Util.compare(priceMode, "V"))) txt += " " + instr.format(instr.round(v));
           if (part) txt += "*";
           ys.add(new double[] { y, y, texts.size() });
           texts.add(txt);
-          cols.add(path.getColor());
+          Color pc = path.getColor();
+          cols.add(pass == 1 ? new Color(pc.getRed(), pc.getGreen(), pc.getBlue(), 150) : pc);
         }
       }
       if (ys.isEmpty()) return;
