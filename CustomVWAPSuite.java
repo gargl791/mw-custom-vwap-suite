@@ -391,8 +391,8 @@ public class CustomVWAPSuite extends Study
       List<Color> cols = new ArrayList<>();
       for(int pass = 0; pass < 2; pass++) for(int p = (pass == 0 ? 0 : 1); p < 3; p++) {
         for(int kk = 0; kk < 5; kk++) {
-          int g = kk == 0 ? 0 : kk <= 2 ? 1 : 2;
-          if (!s.getBoolean(k(p,"ENABLED"), true) || !s.getBoolean(k(p, (pass == 1 ? "PLBL" : "LBL") + g), true)) continue;
+          int lvl = kk == 0 ? 0 : kk <= 2 ? 1 : 2;
+          if (!s.getBoolean(k(p,"ENABLED"), true) || !s.getBoolean(k(p, (pass == 1 ? "PLBL" : "LBL") + lvl), true)) continue;
           if (pass == 1 && !s.getBoolean(k(p,"PRIOR"), true)) continue;
           String pk = kk == 0 ? k(p,"PATH") : kk <= 2 ? k(p,"PATH1") : k(p,"PATH2");
           var path = s.getPath(pk);
